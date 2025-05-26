@@ -73,29 +73,36 @@ TEMPLATES = [
 WSGI_APPLICATION = 'love_project.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# Check if we're in testing/CI environment
+TESTING = 'test' in os.sys.argv or os.environ.get('TESTING') == 'True'
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-# settings.py
-DATABASES = {
-    "default": {
-        "ENGINE": "mssql",
-        "NAME": "SnowfallDB",
-        "USER": "ad",
-        "PASSWORD": "quocthangsu6@gmail.com",
-        "HOST": "st-lucia.database.windows.net",
-        "PORT": "1433",
-        "OPTIONS": {"driver": "ODBC Driver 17 for SQL Server", 
+if TESTING or os.environ.get('USE_SQLITE') == 'True':
+    # Use SQLite for testing and CI
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:' if TESTING else BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    # Use SQL Server for production/development
+    DATABASES = {
+        "default": {
+            "ENGINE": "mssql",
+            "NAME": "SnowfallDB",
+            "USER": "ad",
+            "PASSWORD": "quocthangsu6@gmail.com",
+            "HOST": "st-lucia.database.windows.net",
+            "PORT": "1433",
+            "OPTIONS": {
+                "driver": "ODBC Driver 17 for SQL Server",
+            },
         },
-    },
-}
+    }
+
+# Override with environment variable if DATABASE_URL is set (useful for deployment)
+if 'DATABASE_URL' in os.environ:
+    DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'])
 
 
 
