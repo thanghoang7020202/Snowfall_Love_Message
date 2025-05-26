@@ -1,10 +1,10 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import login, authenticate
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth import login, authenticate, login as auth_login
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib import messages
+from django.contrib import messages as dj_messages
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.urls import reverse
@@ -23,11 +23,27 @@ def register(request):
         if form.is_valid():
             user = form.save()
             username = form.cleaned_data.get('username')
-            messages.success(request, f'Account created for {username}!')
+            dj_messages.success(request, f'Account created for {username}! You can now log in.')
             return redirect('login')
+        else:
+            dj_messages.error(request, "Registration failed. Please correct the errors below.")
     else:
         form = UserCreationForm()
     return render(request, 'registration/register.html', {'form': form})
+
+def login(request):
+    if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            auth_login(request, user)
+            dj_messages.success(request, f"Welcome back, {user.username}!")
+            return redirect('dashboard')
+        else:
+            dj_messages.error(request, "Login failed. Please check your username and password.")
+    else:
+        form = AuthenticationForm()
+    return render(request, 'registration/login.html', {'form': form})
 
 @login_required
 def dashboard(request):
@@ -226,7 +242,7 @@ def edit_page(request, page_id):
         page.background_color = request.POST.get('background_color', page.background_color)
         page.animation_speed = float(request.POST.get('animation_speed', page.animation_speed))
         page.save()
-        messages.success(request, 'Page updated successfully!')
+        dj_messages.success(request, 'Page updated successfully!')
         return redirect('edit_page', page_id=page.id)
     
     # Generate QR code
@@ -397,7 +413,7 @@ def duplicate_page(request, page_id):
             font_size=message.font_size
         )
     
-    messages.success(request, f'Page duplicated successfully!')
+    dj_messages.success(request, f'Page duplicated successfully!')
     return redirect('edit_page', page_id=new_page.id)
 
 @login_required
@@ -407,7 +423,7 @@ def delete_page(request, page_id):
         page = get_object_or_404(MessagePage, id=page_id, user=request.user)
         page_title = page.title
         page.delete()
-        messages.success(request, f'Page "{page_title}" deleted successfully!')
+        dj_messages.success(request, f'Page "{page_title}" deleted successfully!')
         return redirect('dashboard')
     
     return redirect('dashboard')
