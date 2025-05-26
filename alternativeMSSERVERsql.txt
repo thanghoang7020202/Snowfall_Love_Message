@@ -1,0 +1,41 @@
+CREATE TABLE MessagePage (
+    id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    user_id INT NULL,
+    title NVARCHAR(200) NOT NULL DEFAULT 'Love Messages',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    text_color NVARCHAR(7) NOT NULL DEFAULT '#FF69B4',
+    background_color NVARCHAR(7) NOT NULL DEFAULT '#000000',
+    animation_speed FLOAT NOT NULL DEFAULT 1.0,
+    is_public BIT NOT NULL DEFAULT 1,
+    view_count INT NOT NULL DEFAULT 0,
+    CONSTRAINT FK_MessagePage_User FOREIGN KEY (user_id) REFERENCES auth_user(id)
+);
+
+CREATE TABLE Message (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    page_id UNIQUEIDENTIFIER NOT NULL,
+    text NVARCHAR(MAX) NOT NULL,
+    [order] INT NOT NULL DEFAULT 0,
+    font_size INT NOT NULL DEFAULT 32,
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT FK_Message_Page FOREIGN KEY (page_id) REFERENCES MessagePage(id)
+);
+
+CREATE TABLE MessageTemplate (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    name NVARCHAR(100) NOT NULL,
+    messages NVARCHAR(MAX) NOT NULL,
+    category NVARCHAR(50) NOT NULL CHECK (category IN ('romantic', 'anniversary', 'proposal', 'birthday', 'general')),
+    is_active BIT NOT NULL DEFAULT 1
+);
+
+SELECT
+    TABLE_SCHEMA,
+    TABLE_NAME
+FROM
+    INFORMATION_SCHEMA.TABLES
+WHERE
+    TABLE_TYPE = 'BASE TABLE'
+ORDER BY
+    TABLE_SCHEMA, TABLE_NAME;

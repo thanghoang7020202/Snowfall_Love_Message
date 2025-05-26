@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
 from pathlib import Path
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,6 +49,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'love_project.urls'
@@ -71,15 +73,56 @@ TEMPLATES = [
 WSGI_APPLICATION = 'love_project.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# Check if we're in testing/CI environment
+import os
+import sys
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+TESTING = 'test' in sys.argv or os.environ.get('TESTING') == 'True'
+
+if TESTING or os.environ.get('USE_SQLITE') == 'True':
+    # Use SQLite for testing and CI
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:' if TESTING else BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    # Check if we're in production (Render) or development
+    if os.environ.get('DB_ENGINE'):
+        # Production: Use environment variables from Render
+        DATABASES = {
+            "default": {
+                "ENGINE": os.environ.get('DB_ENGINE', 'mssql'),
+                "NAME": os.environ.get('DB_NAME', 'SnowfallDB'),
+                "USER": os.environ.get('DB_USER', 'ad'),
+                "PASSWORD": os.environ.get('DB_PASSWORD'),
+                "HOST": os.environ.get('DB_HOST', 'st-lucia.database.windows.net'),
+                "PORT": os.environ.get('DB_PORT', '1433'),
+                "OPTIONS": {
+                    "driver": os.environ.get('DB_DRIVER', 'ODBC Driver 17 for SQL Server'),
+                },
+            },
+        }
+    else:
+        # Development: Use hardcoded values
+        DATABASES = {
+            "default": {
+                "ENGINE": "mssql",
+                "NAME": "SnowfallDB",
+                "USER": "ad",
+                "PASSWORD": "quocthangsu6@gmail.com",
+                "HOST": "st-lucia.database.windows.net",
+                "PORT": "1433",
+                "OPTIONS": {
+                    "driver": "ODBC Driver 17 for SQL Server",
+                },
+            },
+        }
+
+# Remove the DATABASE_URL override since we're not using it anymore
+# if 'DATABASE_URL' in os.environ:
+#     DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'])
 
 
 # Password validation
@@ -119,8 +162,13 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+    # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
+    # and renames the files with unique names for each version to support long-term caching
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+#STATIC_ROOT = BASE_DIR / 'staticfiles'
+#STATICFILES_DIRS = [BASE_DIR / 'static']
 
 # Media files
 MEDIA_URL = '/media/'
