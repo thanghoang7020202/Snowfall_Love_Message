@@ -163,7 +163,7 @@
 <div id="info">
     <h3 style="margin-bottom: 10px; background: linear-gradient(45deg, {{ page.text_color }}, #ff6b9d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">{{ page.title }}</h3>
     <p style="font-size: 14px; opacity: 0.8;">🖱️ Drag to rotate • 🖲️ Scroll to zoom</p>
-    <p style="font-size: 12px; opacity: 0.6; margin-top: 10px;">💌 {{ page.messages.count }} messages floating in 3D space</p>
+    <p style="font-size: 12px; opacity: 0.6; margin-top: 10px;">💌 Messages falling from above</p>
     <p id="fpsCounter" style="font-size: 10px; opacity: 0.5; margin-top: 5px;">FPS: --</p>
 </div>
 
@@ -178,384 +178,239 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-// Global variables
-let scene, camera, renderer, messages = [];
+let scene, camera, renderer, controls, messages = [], hearts = [];
 let animationSpeed = {{ page.animation_speed|default:1 }};
 let isAnimating = true;
-let mouseX = 0, mouseY = 0;
 let cameraDistance = 50;
 let frameCount = 0;
 let lastTime = 0;
+let lastMessageTime = 0;
 
 // Message data
 const messageTexts = {{ messages_json|safe }};
 const textColor = "{{ page.text_color }}";
 const backgroundColor = "{{ page.background_color }}";
 
-// Camera controls
-let isDragging = false;
-let previousMousePosition = { x: 0, y: 0 };
-let cameraRotation = { x: 0, y: 0 };
+// Responsive camera setup for better mobile/desktop view
+function getInitialCameraSettings() {
+    if (window.innerWidth < 700) {
+        // Phone: wider view, higher up, looking upward a bit
+        return { pos: [0, 10, 90], look: [0, 20, 0] };
+    } else {
+        // Desktop: default, looking upward a bit
+        return { pos: [0, 0, cameraDistance], look: [0, 20, 0] };
+    }
+}
 
 function init() {
-    try {
-        // Hide loading after delay
-        setTimeout(() => {
-            document.getElementById('loading').style.display = 'none';
-        }, 1000);
-        
-        // Scene setup
-        scene = new THREE.Scene();
-        
-        // Add ambient lighting
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
-        scene.add(ambientLight);
-        
-        // Add directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(50, 50, 50);
-        scene.add(directionalLight);
-        
-        // Camera setup
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0, cameraDistance);
-        
-        // Renderer setup
-        renderer = new THREE.WebGLRenderer({ 
-            antialias: true, 
-            alpha: true,
-            powerPreference: "high-performance"
-        });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(backgroundColor, 0);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        
-        document.getElementById('three-container').appendChild(renderer.domElement);
-        
-        // Create particle background
-        createParticleBackground();
-        
-        // Create floating messages
-        createMessages();
-        
-        // Setup controls
-        setupControls();
-        
-        // Event listeners
-        window.addEventListener('resize', onWindowResize);
-        
-        // Start animation loop
-        animate();
-        
-        // Show instructions after 3 seconds
-        setTimeout(() => {
-            if (messageTexts.length > 0) {
-                toggleInstructions();
-            }
-        }, 3000);
-        
-    } catch (error) {
-        console.error('Initialization error:', error);
-        document.getElementById('loading').innerHTML = '<p>Error loading 3D scene. Please refresh the page.</p>';
-    }
+    setTimeout(() => {
+        document.getElementById('loading').style.display = 'none';
+    }, 1000);
+
+    scene = new THREE.Scene();
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(0, 50, 50);
+    scene.add(dirLight);
+
+    // Responsive camera
+    const camSet = getInitialCameraSettings();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(...camSet.pos);
+    camera.lookAt(...camSet.look);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(backgroundColor, 0);
+    document.getElementById('three-container').appendChild(renderer.domElement);
+
+    // OrbitControls for camera movement
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = false;
+    controls.minDistance = 40;
+    controls.maxDistance = 2000;
+
+    // Restrict horizontal rotation to ±30 degrees (in radians)
+    controls.minAzimuthAngle = -Math.PI / 6;
+    controls.maxAzimuthAngle = Math.PI / 6;
+
+    // Optionally restrict vertical rotation (polar angle) if you want
+    // controls.minPolarAngle = 0; // looking straight up
+    // controls.maxPolarAngle = Math.PI / 2; // looking at horizon
+
+    // Mix text and hearts together
+    createMixedParticles();
+
+    window.addEventListener('resize', onWindowResize);
+
+    animate();
 }
 
-function createParticleBackground() {
-    const particleCount = 100;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    
-    for (let i = 0; i < particleCount * 3; i += 3) {
-        positions[i] = (Math.random() - 0.5) * 200;
-        positions[i + 1] = (Math.random() - 0.5) * 200;
-        positions[i + 2] = (Math.random() - 0.5) * 200;
-    }
-    
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    
-    const material = new THREE.PointsMaterial({
-        color: textColor,
-        size: 2,
-        transparent: true,
-        opacity: 0.3
-    });
-    
-    const particles = new THREE.Points(geometry, material);
-    scene.add(particles);
-}
+// Mix text and hearts together in the same array and z-range
+function createMixedParticles() {
+    const total = 80; // total objects (hearts + texts)
+    for (let i = 0; i < total; i++) {
+        if (Math.random() < 0.5) {
+            // Heart
+            const geometry = createHeartGeometry(0.7 + Math.random() * 0.7);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0xff4d6d,
+                shininess: 80,
+                specular: 0xffffff,
+                transparent: true,
+                opacity: 0.7
+            });
+            const mesh = new THREE.Mesh(geometry, material);
 
-function createMessages() {
-    if (messageTexts.length === 0) {
-        // Show no messages notice
-        const noMessagesDiv = document.createElement('div');
-        noMessagesDiv.innerHTML = `
-            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                        text-align: center; color: white; z-index: 100;">
-                <h2>💌 No Messages Yet</h2>
-                <p>This love page doesn't have any messages to display.</p>
-                {% if not is_preview %}
-                <a href="{% url 'edit_page' page.id %}" style="color: ${textColor}; text-decoration: underline;">
-                    Add some messages →
-                </a>
-                {% endif %}
-            </div>
-        `;
-        document.body.appendChild(noMessagesDiv);
-        return;
-    }
-    
-    messageTexts.forEach((text, index) => {
-        createTextMesh(text, index);
-    });
-}
+            mesh.position.x = (Math.random() - 0.5) * 100 + 20; // wider range
+            mesh.position.y = (Math.random() - 0.5) * 100 + 20; // start higher
+            mesh.position.z = (Math.random() - 0.5) * 100; // mix with text z-range
 
-function createTextMesh(text, index) {
-    // Create canvas for text texture
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    canvas.width = 1024;
-    canvas.height = 256;
-    
-    // Style text
-    context.fillStyle = 'transparent';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Text styling
-    context.fillStyle = textColor;
-    context.font = 'bold 48px Arial, sans-serif';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    
-    // Add glow effect
-    context.shadowColor = textColor;
-    context.shadowBlur = 20;
-    context.shadowOffsetX = 0;
-    context.shadowOffsetY = 0;
-    
-    // Word wrap for long messages
-    const words = text.split(' ');
-    const maxWidth = canvas.width - 100;
-    let line = '';
-    let y = canvas.height / 2;
-    
-    if (words.length > 6) {
-        // Multi-line text
-        const lines = [];
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = context.measureText(testLine);
-            const testWidth = metrics.width;
-            if (testWidth > maxWidth && n > 0) {
-                lines.push(line);
-                line = words[n] + ' ';
-            } else {
-                line = testLine;
-            }
+            mesh.userData = {
+                floatSpeed: 0.1 + Math.random() * 0.2,
+                floatPhase: Math.random() * Math.PI * 2,
+                isHeart: true
+            };
+
+            scene.add(mesh);
+            messages.push(mesh);
+        } else {
+            // Text
+            createFallingMessage(true); // true = random z
         }
-        lines.push(line);
-        
-        // Draw multiple lines
-        const lineHeight = 60;
-        const startY = canvas.height / 2 - (lines.length - 1) * lineHeight / 2;
-        lines.forEach((line, i) => {
-            context.fillText(line, canvas.width / 2, startY + i * lineHeight);
-        });
-    } else {
-        // Single line
-        context.fillText(text, canvas.width / 2, y);
     }
-    
-    // Create texture and material
+}
+
+// 3D heart geometry function (true heart)
+function createHeartGeometry(scale = 1) {
+    const shape = new THREE.Shape();
+    for (let t = 0; t <= Math.PI; t += Math.PI / 32) {
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        if (t === 0) {
+            shape.moveTo(x * scale * 0.07, y * scale * 0.07);
+        } else {
+            shape.lineTo(x * scale * 0.07, y * scale * 0.07);
+        }
+    }
+    const extrudeSettings = {
+        depth: 2 * scale,
+        bevelEnabled: true,
+        bevelSegments: 2,
+        steps: 2,
+        bevelSize: 0.5 * scale,
+        bevelThickness: 0.7 * scale
+    };
+    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+}
+
+// If randomZ is true, text will be mixed in z-range with hearts
+function createFallingMessage(randomZ = false) {
+    if (!messageTexts.length) return;
+    const text = messageTexts[Math.floor(Math.random() * messageTexts.length)];
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 4096;
+    canvas.height = 1024;
+
+    ctx.shadowColor = "#fff";
+    ctx.shadowBlur = 180;
+    ctx.font = 'bold 220px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
     const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    
-    const material = new THREE.MeshLambertMaterial({
+    const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
-        opacity: 0.9,
-        side: THREE.DoubleSide
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: false
     });
-    
-    // Create geometry
-    const geometry = new THREE.PlaneGeometry(12, 3);
+    const geometry = new THREE.PlaneGeometry(70, 17);
+
     const mesh = new THREE.Mesh(geometry, material);
-    
-    // Position in 3D space
-    const radius = 25 + Math.random() * 20;
-    const theta = (index / messageTexts.length) * Math.PI * 2;
-    const phi = Math.random() * Math.PI;
-    
-    mesh.position.x = radius * Math.sin(phi) * Math.cos(theta);
-    mesh.position.y = (Math.random() - 0.5) * 40;
-    mesh.position.z = radius * Math.sin(phi) * Math.sin(theta);
-    
-    // Random rotation
-    mesh.rotation.x = Math.random() * Math.PI * 2;
-    mesh.rotation.y = Math.random() * Math.PI * 2;
-    mesh.rotation.z = Math.random() * Math.PI * 2;
-    
-    // Animation properties
+
+    mesh.position.x = (Math.random() - 0.5) * 200;
+    mesh.position.y = (Math.random() - 0.5) * 60 + 100; // start higher
+    mesh.position.z = randomZ ? (Math.random() - 0.5) * 40 : 0; // mix with hearts if randomZ
+
+    mesh.rotation.x = 0;
+    mesh.rotation.y = 0;
+    mesh.rotation.z = 0;
+
     mesh.userData = {
-        originalPosition: mesh.position.clone(),
-        originalRotation: mesh.rotation.clone(),
-        speed: 0.3 + Math.random() * 0.4,
-        rotationSpeed: {
-            x: (Math.random() - 0.5) * 0.01,
-            y: (Math.random() - 0.5) * 0.01,
-            z: (Math.random() - 0.5) * 0.01
-        },
-        floatAmount: 3 + Math.random() * 4,
-        phase: Math.random() * Math.PI * 2
+        fallSpeed: 12 + Math.random() * 10,
+        drift: 0,
+        rotSpeed: 0,
+        isHeart: false
     };
-    
+
     scene.add(mesh);
     messages.push(mesh);
 }
 
-function setupControls() {
-    const container = renderer.domElement;
-    
-    // Mouse controls
-    container.addEventListener('mousedown', onMouseDown);
-    container.addEventListener('mousemove', onMouseMove);
-    container.addEventListener('mouseup', onMouseUp);
-    container.addEventListener('wheel', onMouseWheel);
-    
-    // Touch controls
-    container.addEventListener('touchstart', onTouchStart);
-    container.addEventListener('touchmove', onTouchMove);
-    container.addEventListener('touchend', onTouchEnd);
-    
-    // Prevent context menu
-    container.addEventListener('contextmenu', e => e.preventDefault());
-}
-
-function onMouseDown(event) {
-    isDragging = true;
-    previousMousePosition = {
-        x: event.clientX,
-        y: event.clientY
-    };
-}
-
-function onMouseMove(event) {
-    if (isDragging) {
-        const deltaMove = {
-            x: event.clientX - previousMousePosition.x,
-            y: event.clientY - previousMousePosition.y
-        };
-        
-        cameraRotation.y += deltaMove.x * 0.005;
-        cameraRotation.x += deltaMove.y * 0.005;
-        
-        // Limit vertical rotation
-        cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x));
-        
-        previousMousePosition = {
-            x: event.clientX,
-            y: event.clientY
-        };
-    }
-    
-    // Update mouse position for subtle camera movement
-    mouseX = (event.clientX - window.innerWidth / 2) / window.innerWidth;
-    mouseY = (event.clientY - window.innerHeight / 2) / window.innerHeight;
-}
-
-function onMouseUp() {
-    isDragging = false;
-}
-
-function onMouseWheel(event) {
-    event.preventDefault();
-    cameraDistance += event.deltaY * 0.05;
-    cameraDistance = Math.max(10, Math.min(100, cameraDistance));
-}
-
-// Touch controls
-let touchStartX = 0, touchStartY = 0;
-
-function onTouchStart(event) {
-    if (event.touches.length === 1) {
-        touchStartX = event.touches[0].clientX;
-        touchStartY = event.touches[0].clientY;
-        isDragging = true;
-    }
-}
-
-function onTouchMove(event) {
-    event.preventDefault();
-    if (event.touches.length === 1 && isDragging) {
-        const deltaX = event.touches[0].clientX - touchStartX;
-        const deltaY = event.touches[0].clientY - touchStartY;
-        
-        cameraRotation.y += deltaX * 0.01;
-        cameraRotation.x += deltaY * 0.01;
-        
-        cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x));
-        
-        touchStartX = event.touches[0].clientX;
-        touchStartY = event.touches[0].clientY;
-    }
-}
-
-function onTouchEnd() {
-    isDragging = false;
-}
-
 function animate() {
     requestAnimationFrame(animate);
-    
+
     // FPS counter
     frameCount++;
     const currentTime = performance.now();
     if (currentTime - lastTime >= 1000) {
-        const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
-        document.getElementById('fpsCounter').textContent = `FPS: ${fps}`;
+        document.getElementById('fpsCounter').textContent = `FPS: ${Math.round((frameCount * 1000) / (currentTime - lastTime))}`;
         frameCount = 0;
         lastTime = currentTime;
     }
-    
-    if (isAnimating) {
-        const time = Date.now() * 0.001 * animationSpeed;
-        
-        // Animate messages
-        messages.forEach((message, index) => {
-            const userData = message.userData;
-            
-            // Floating animation
-            message.position.y = userData.originalPosition.y + 
-                Math.sin(time * userData.speed + userData.phase) * userData.floatAmount;
-            
-            // Rotation animation
-            message.rotation.x += userData.rotationSpeed.x * animationSpeed;
-            message.rotation.y += userData.rotationSpeed.y * animationSpeed;
-            message.rotation.z += userData.rotationSpeed.z * animationSpeed;
-            
-            // Orbital movement
-            const orbitSpeed = 0.1 * animationSpeed;
-            const orbitRadius = 2;
-            message.position.x = userData.originalPosition.x + 
-                Math.cos(time * orbitSpeed + index) * orbitRadius;
-            message.position.z = userData.originalPosition.z + 
-                Math.sin(time * orbitSpeed + index) * orbitRadius;
-        });
+
+    // Add more falling text over time for density
+    if (isAnimating && messageTexts.length > 0) {
+        const now = Date.now();
+        if (!lastMessageTime || now - lastMessageTime > 100) {
+            createFallingMessage(true);
+            lastMessageTime = now;
+        }
     }
-    
-    // Update camera position
-    camera.position.x = cameraDistance * Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x);
-    camera.position.y = cameraDistance * Math.sin(cameraRotation.x);
-    camera.position.z = cameraDistance * Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x);
-    
-    // Add subtle mouse influence
-    camera.position.x += mouseX * 5;
-    camera.position.y += mouseY * 5;
-    
-    camera.lookAt(scene.position);
-    
+
+    // Animate all objects (hearts float, text falls)
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const obj = messages[i];
+        if (obj.userData.isHeart) {
+            obj.position.y += Math.sin(Date.now() * 0.001 + obj.userData.floatPhase) * obj.userData.floatSpeed * 0.1;
+            obj.position.x += Math.cos(Date.now() * 0.001 + obj.userData.floatPhase) * obj.userData.floatSpeed * 0.05;
+            obj.rotation.y += 0.01;
+            obj.rotation.x += 0.005;
+            if (obj.position.y < -90) {
+                obj.position.y = 60 + Math.random() * 10;
+                obj.position.x = (Math.random() - 0.5) * 80;
+                obj.position.z = (Math.random() - 0.5) * 20;
+            }
+        } else {
+            obj.position.y -= obj.userData.fallSpeed * 0.016 * animationSpeed;
+            obj.rotation.x = 0;
+            obj.rotation.y = 0;
+            obj.rotation.z = 0;
+            if (obj.position.y < -80) {
+                scene.remove(obj);
+                messages.splice(i, 1);
+                obj.geometry.dispose();
+                obj.material.dispose();
+                if (obj.material.map) obj.material.map.dispose();
+            }
+        }
+    }
+
+    controls.update();
     renderer.render(scene, camera);
 }
 
@@ -563,6 +418,11 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Adjust camera for phone/desktop on resize
+    const camSet = getInitialCameraSettings();
+    camera.position.set(...camSet.pos);
+    camera.lookAt(...camSet.look);
 }
 
 function toggleAnimation() {
@@ -577,10 +437,10 @@ function changeSpeed(delta) {
 }
 
 function resetCamera() {
-    cameraRotation = { x: 0, y: 0 };
-    cameraDistance = 50;
-    mouseX = 0;
-    mouseY = 0;
+    controls.reset();
+    const camSet = getInitialCameraSettings();
+    camera.position.set(...camSet.pos);
+    camera.lookAt(...camSet.look);
 }
 
 function toggleInstructions() {
@@ -598,17 +458,6 @@ function toggleFullscreen() {
     }
 }
 
-// Initialize when page loads
 window.addEventListener('load', init);
-
-// Prevent zoom on double tap (mobile)
-let lastTouchEnd = 0;
-document.addEventListener('touchend', function (event) {
-    const now = (new Date()).getTime();
-    if (now - lastTouchEnd <= 300) {
-        event.preventDefault();
-    }
-    lastTouchEnd = now;
-}, false);
 </script>
 {% endblock %}

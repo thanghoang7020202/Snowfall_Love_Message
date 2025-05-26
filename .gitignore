@@ -7,3 +7,6 @@ __pycache__/
 
 # in venv
 venv/
+
+# in staticfiles
+staticfiles/

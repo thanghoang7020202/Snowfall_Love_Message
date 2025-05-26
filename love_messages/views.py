@@ -102,8 +102,7 @@ def create_page(request):
 
 def generate_heart_qr_code(url):
     """Generate a heart-shaped QR code with rotated QR and semi-circles, transparent QR background"""
-    # for reader, sorry that I used a lot of hardcoded values here
-    
+
     # Create QR code with high error correction
     qr = qrcode.QRCode(
         version=6,
@@ -139,33 +138,13 @@ def generate_heart_qr_code(url):
     # Apply masks to QR code to get left and right semi-circular QR lobes
     qr_left = qr_img.copy()
     qr_left.putalpha(mask_left)
-    datas = qr_left.getdata()
-    newData = []
-    for item in datas:
-        # Replace white with transparent
-        if item[0] > 240 and item[1] > 240 and item[2] > 240:
-            newData.append((255, 255, 255, 0))
-        else:
-            newData.append(item)
-    qr_left.putdata(newData)
 
     qr_right = qr_img.copy()
     qr_right.putalpha(mask_right)
-    datas = qr_right.getdata()
-    newData = []
-    for item in datas:
-        # Replace white with transparent
-        if item[0] > 240 and item[1] > 240 and item[2] > 240:
-            newData.append((255, 255, 255, 0))
-        else:
-            newData.append(item)
-    qr_right.putdata(newData)
-    
-    # rotate the QR left 45 degrees for the left side
+
+    # Rotate the QR lobes
     qr_left = qr_left.rotate(-45, expand=False, fillcolor=(255, 255, 255, 0))
     qr_right = qr_right.rotate(45, expand=False, fillcolor=(255, 255, 255, 0))
-    # Adjust size for rotated QR codes
-    
 
     # Rotate QR code 45 degrees for the bottom
     rotated_qr = qr_img.rotate(45, expand=True, fillcolor=(255, 255, 255, 0))
@@ -186,7 +165,7 @@ def generate_heart_qr_code(url):
     # Paste the rotated QR code (now with transparent background)
     heart_img.paste(rotated_qr, (qr_x, qr_y), rotated_qr)
 
-    # Calculate positions for the semi-circular QR codes (same as before)
+    # Calculate positions for the semi-circular QR codes
     radius = qr_size // 2
     center_x = heart_width // 2
     vertical_offset = (radius // 2) + 45
