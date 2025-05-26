@@ -99,6 +99,20 @@ def create_page(request):
     
     return render(request, 'create_page.html', {'templates': templates})
 
+def remove_whiteBG(image):
+    """Remove white background from an image and make it transparent"""
+    datas = image.getdata()
+    newData = []
+    for item in datas:
+        # Change all white (also shades of whites)
+        # pixels to transparent
+        if item[0] > 240 and item[1] > 240 and item[2] > 240:
+            newData.append((255, 255, 255, 0))
+        else:
+            newData.append(item)
+    image.putdata(newData)
+    return image
+    
 
 def generate_heart_qr_code(url):
     """Generate a heart-shaped QR code with rotated QR and semi-circles, transparent QR background"""
@@ -115,15 +129,7 @@ def generate_heart_qr_code(url):
 
     # Create base QR code image with red fill and white background
     qr_img = qr.make_image(fill_color="red", back_color="white").convert("RGBA")
-    datas = qr_img.getdata()
-    newData = []
-    for item in datas:
-        # Replace white with transparent
-        if item[0] > 240 and item[1] > 240 and item[2] > 240:
-            newData.append((255, 255, 255, 0))
-        else:
-            newData.append(item)
-    qr_img.putdata(newData)
+    qr_img = remove_whiteBG(qr_img)  # Remove white background
     qr_size = qr_img.size[0]
 
     # Create semi-circular QR code masks
@@ -138,9 +144,11 @@ def generate_heart_qr_code(url):
     # Apply masks to QR code to get left and right semi-circular QR lobes
     qr_left = qr_img.copy()
     qr_left.putalpha(mask_left)
+    qr_left = remove_whiteBG(qr_left)  # Ensure transparency
 
     qr_right = qr_img.copy()
     qr_right.putalpha(mask_right)
+    qr_right = remove_whiteBG(qr_right)  # Ensure transparency
 
     # Rotate the QR lobes
     qr_left = qr_left.rotate(-45, expand=False, fillcolor=(255, 255, 255, 0))
@@ -168,16 +176,16 @@ def generate_heart_qr_code(url):
     # Calculate positions for the semi-circular QR codes
     radius = qr_size // 2
     center_x = heart_width // 2
-    vertical_offset = (radius // 2) + 45
+    vertical_offset = (radius // 2) + 46
     
     # Left semi-circular QR position
-    left_center_x = center_x - radius // 2 - 35
+    left_center_x = center_x - radius // 2 - 32
     left_center_y = qr_y + vertical_offset
     left_qr_x = left_center_x - radius
     left_qr_y = left_center_y - radius
     
     # Right semi-circular QR position
-    right_center_x = center_x + radius // 2 + 35
+    right_center_x = center_x + radius // 2 + 32
     right_center_y = qr_y + vertical_offset
     right_qr_x = right_center_x - radius
     right_qr_y = right_center_y - radius
