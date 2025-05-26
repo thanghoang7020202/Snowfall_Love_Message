@@ -1,0 +1,9 @@
+# remove all cache files
+**/*.cache
+**.cache
+
+# in _pycache_
+__pycache__/
+
+# in venv
+venv/

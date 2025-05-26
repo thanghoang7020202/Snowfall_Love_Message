@@ -1,0 +1,32 @@
+<!-- LOGIN TEMPLATE (registration/login.html) -->
+{% extends 'base.html' %}
+
+{% block title %}Login - Love Messages 3D{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 100px auto;">
+    <h1 style="color: white; text-align: center; margin-bottom: 30px;">💕 Login</h1>
+    
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        
+        <div style="text-align: center;">
+            <button type="submit" class="btn">Login</button>
+        </div>
+    </form>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <p style="color: white;">Don't have an account?</p>
+        <a href="{% url 'register' %}" class="btn" style="background: linear-gradient(45deg, #27ae60, #2ecc71);">Register</a>
+    </div>
+</div>
+{% endblock %}

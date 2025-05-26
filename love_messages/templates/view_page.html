@@ -1,0 +1,614 @@
+<!-- VIEW PAGE TEMPLATE (view_page.html) - Enhanced 3D Animation -->
+{% extends 'base.html' %}
+
+{% block title %}{{ page.title }} - 3D Love Messages{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background: {{ page.background_color }};
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        font-family: 'Arial', sans-serif;
+    }
+    
+    #three-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1;
+    }
+    
+    #controls {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10;
+        background: rgba(0,0,0,0.7);
+        padding: 15px;
+        border-radius: 15px;
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+    
+    #info {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 10;
+        background: rgba(0,0,0,0.7);
+        padding: 15px;
+        border-radius: 15px;
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: white;
+        max-width: 300px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+    
+    .control-btn {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        margin: 2px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .control-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .control-btn.active {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+    }
+    
+    #loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 100;
+        color: white;
+        text-align: center;
+        font-size: 18px;
+    }
+    
+    .loading-spinner {
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top: 3px solid white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    #instructions {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        text-align: center;
+        backdrop-filter: blur(15px);
+        opacity: 0;
+        transition: opacity 0.5s ease;
+    }
+    
+    #instructions.show {
+        opacity: 1;
+    }
+    
+    @media (max-width: 768px) {
+        #controls {
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+        }
+        
+        #info {
+            bottom: 10px;
+            left: 10px;
+            padding: 10px;
+            max-width: 250px;
+        }
+        
+        .control-btn {
+            padding: 6px 8px;
+            font-size: 10px;
+        }
+    }
+</style>
+
+<div id="loading">
+    <div class="loading-spinner"></div>
+    <p>Loading 3D Love Messages...</p>
+</div>
+
+<div id="three-container"></div>
+
+<div id="controls">
+    <button id="playPauseBtn" onclick="toggleAnimation()" class="control-btn">⏸️ Pause</button>
+    <br>
+    <button onclick="changeSpeed(-0.2)" class="control-btn">➖ Slower</button>
+    <button onclick="changeSpeed(0.2)" class="control-btn">➕ Faster</button>
+    <br>
+    <button onclick="resetCamera()" class="control-btn">🎯 Reset View</button>
+    <button onclick="toggleInstructions()" class="control-btn">❓ Help</button>
+    {% if not is_preview %}
+    <br>
+    <button onclick="toggleFullscreen()" class="control-btn">⛶ Fullscreen</button>
+    {% endif %}
+</div>
+
+<div id="info">
+    <h3 style="margin-bottom: 10px; background: linear-gradient(45deg, {{ page.text_color }}, #ff6b9d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">{{ page.title }}</h3>
+    <p style="font-size: 14px; opacity: 0.8;">🖱️ Drag to rotate • 🖲️ Scroll to zoom</p>
+    <p style="font-size: 12px; opacity: 0.6; margin-top: 10px;">💌 {{ page.messages.count }} messages floating in 3D space</p>
+    <p id="fpsCounter" style="font-size: 10px; opacity: 0.5; margin-top: 5px;">FPS: --</p>
+</div>
+
+<div id="instructions">
+    <h3 style="margin-bottom: 15px;">🌟 3D Love Messages Controls</h3>
+    <p><strong>Mouse:</strong> Drag to rotate the view</p>
+    <p><strong>Scroll:</strong> Zoom in and out</p>
+    <p><strong>Touch:</strong> Single finger drag to rotate</p>
+    <p><strong>Pinch:</strong> Zoom on mobile devices</p>
+    <br>
+    <button onclick="toggleInstructions()" class="control-btn">Got it!</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Global variables
+let scene, camera, renderer, messages = [];
+let animationSpeed = {{ page.animation_speed|default:1 }};
+let isAnimating = true;
+let mouseX = 0, mouseY = 0;
+let cameraDistance = 50;
+let frameCount = 0;
+let lastTime = 0;
+
+// Message data
+const messageTexts = {{ messages_json|safe }};
+const textColor = "{{ page.text_color }}";
+const backgroundColor = "{{ page.background_color }}";
+
+// Camera controls
+let isDragging = false;
+let previousMousePosition = { x: 0, y: 0 };
+let cameraRotation = { x: 0, y: 0 };
+
+function init() {
+    try {
+        // Hide loading after delay
+        setTimeout(() => {
+            document.getElementById('loading').style.display = 'none';
+        }, 1000);
+        
+        // Scene setup
+        scene = new THREE.Scene();
+        
+        // Add ambient lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        
+        // Add directional light
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        scene.add(directionalLight);
+        
+        // Camera setup
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, cameraDistance);
+        
+        // Renderer setup
+        renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            alpha: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(backgroundColor, 0);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        document.getElementById('three-container').appendChild(renderer.domElement);
+        
+        // Create particle background
+        createParticleBackground();
+        
+        // Create floating messages
+        createMessages();
+        
+        // Setup controls
+        setupControls();
+        
+        // Event listeners
+        window.addEventListener('resize', onWindowResize);
+        
+        // Start animation loop
+        animate();
+        
+        // Show instructions after 3 seconds
+        setTimeout(() => {
+            if (messageTexts.length > 0) {
+                toggleInstructions();
+            }
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Initialization error:', error);
+        document.getElementById('loading').innerHTML = '<p>Error loading 3D scene. Please refresh the page.</p>';
+    }
+}
+
+function createParticleBackground() {
+    const particleCount = 100;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    
+    for (let i = 0; i < particleCount * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 200;
+        positions[i + 1] = (Math.random() - 0.5) * 200;
+        positions[i + 2] = (Math.random() - 0.5) * 200;
+    }
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    
+    const material = new THREE.PointsMaterial({
+        color: textColor,
+        size: 2,
+        transparent: true,
+        opacity: 0.3
+    });
+    
+    const particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+}
+
+function createMessages() {
+    if (messageTexts.length === 0) {
+        // Show no messages notice
+        const noMessagesDiv = document.createElement('div');
+        noMessagesDiv.innerHTML = `
+            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                        text-align: center; color: white; z-index: 100;">
+                <h2>💌 No Messages Yet</h2>
+                <p>This love page doesn't have any messages to display.</p>
+                {% if not is_preview %}
+                <a href="{% url 'edit_page' page.id %}" style="color: ${textColor}; text-decoration: underline;">
+                    Add some messages →
+                </a>
+                {% endif %}
+            </div>
+        `;
+        document.body.appendChild(noMessagesDiv);
+        return;
+    }
+    
+    messageTexts.forEach((text, index) => {
+        createTextMesh(text, index);
+    });
+}
+
+function createTextMesh(text, index) {
+    // Create canvas for text texture
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 1024;
+    canvas.height = 256;
+    
+    // Style text
+    context.fillStyle = 'transparent';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Text styling
+    context.fillStyle = textColor;
+    context.font = 'bold 48px Arial, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    // Add glow effect
+    context.shadowColor = textColor;
+    context.shadowBlur = 20;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 0;
+    
+    // Word wrap for long messages
+    const words = text.split(' ');
+    const maxWidth = canvas.width - 100;
+    let line = '';
+    let y = canvas.height / 2;
+    
+    if (words.length > 6) {
+        // Multi-line text
+        const lines = [];
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = context.measureText(testLine);
+            const testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+        
+        // Draw multiple lines
+        const lineHeight = 60;
+        const startY = canvas.height / 2 - (lines.length - 1) * lineHeight / 2;
+        lines.forEach((line, i) => {
+            context.fillText(line, canvas.width / 2, startY + i * lineHeight);
+        });
+    } else {
+        // Single line
+        context.fillText(text, canvas.width / 2, y);
+    }
+    
+    // Create texture and material
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    
+    const material = new THREE.MeshLambertMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide
+    });
+    
+    // Create geometry
+    const geometry = new THREE.PlaneGeometry(12, 3);
+    const mesh = new THREE.Mesh(geometry, material);
+    
+    // Position in 3D space
+    const radius = 25 + Math.random() * 20;
+    const theta = (index / messageTexts.length) * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+    
+    mesh.position.x = radius * Math.sin(phi) * Math.cos(theta);
+    mesh.position.y = (Math.random() - 0.5) * 40;
+    mesh.position.z = radius * Math.sin(phi) * Math.sin(theta);
+    
+    // Random rotation
+    mesh.rotation.x = Math.random() * Math.PI * 2;
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+    mesh.rotation.z = Math.random() * Math.PI * 2;
+    
+    // Animation properties
+    mesh.userData = {
+        originalPosition: mesh.position.clone(),
+        originalRotation: mesh.rotation.clone(),
+        speed: 0.3 + Math.random() * 0.4,
+        rotationSpeed: {
+            x: (Math.random() - 0.5) * 0.01,
+            y: (Math.random() - 0.5) * 0.01,
+            z: (Math.random() - 0.5) * 0.01
+        },
+        floatAmount: 3 + Math.random() * 4,
+        phase: Math.random() * Math.PI * 2
+    };
+    
+    scene.add(mesh);
+    messages.push(mesh);
+}
+
+function setupControls() {
+    const container = renderer.domElement;
+    
+    // Mouse controls
+    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mousemove', onMouseMove);
+    container.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('wheel', onMouseWheel);
+    
+    // Touch controls
+    container.addEventListener('touchstart', onTouchStart);
+    container.addEventListener('touchmove', onTouchMove);
+    container.addEventListener('touchend', onTouchEnd);
+    
+    // Prevent context menu
+    container.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function onMouseDown(event) {
+    isDragging = true;
+    previousMousePosition = {
+        x: event.clientX,
+        y: event.clientY
+    };
+}
+
+function onMouseMove(event) {
+    if (isDragging) {
+        const deltaMove = {
+            x: event.clientX - previousMousePosition.x,
+            y: event.clientY - previousMousePosition.y
+        };
+        
+        cameraRotation.y += deltaMove.x * 0.005;
+        cameraRotation.x += deltaMove.y * 0.005;
+        
+        // Limit vertical rotation
+        cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x));
+        
+        previousMousePosition = {
+            x: event.clientX,
+            y: event.clientY
+        };
+    }
+    
+    // Update mouse position for subtle camera movement
+    mouseX = (event.clientX - window.innerWidth / 2) / window.innerWidth;
+    mouseY = (event.clientY - window.innerHeight / 2) / window.innerHeight;
+}
+
+function onMouseUp() {
+    isDragging = false;
+}
+
+function onMouseWheel(event) {
+    event.preventDefault();
+    cameraDistance += event.deltaY * 0.05;
+    cameraDistance = Math.max(10, Math.min(100, cameraDistance));
+}
+
+// Touch controls
+let touchStartX = 0, touchStartY = 0;
+
+function onTouchStart(event) {
+    if (event.touches.length === 1) {
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+        isDragging = true;
+    }
+}
+
+function onTouchMove(event) {
+    event.preventDefault();
+    if (event.touches.length === 1 && isDragging) {
+        const deltaX = event.touches[0].clientX - touchStartX;
+        const deltaY = event.touches[0].clientY - touchStartY;
+        
+        cameraRotation.y += deltaX * 0.01;
+        cameraRotation.x += deltaY * 0.01;
+        
+        cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x));
+        
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+    }
+}
+
+function onTouchEnd() {
+    isDragging = false;
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    
+    // FPS counter
+    frameCount++;
+    const currentTime = performance.now();
+    if (currentTime - lastTime >= 1000) {
+        const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+        document.getElementById('fpsCounter').textContent = `FPS: ${fps}`;
+        frameCount = 0;
+        lastTime = currentTime;
+    }
+    
+    if (isAnimating) {
+        const time = Date.now() * 0.001 * animationSpeed;
+        
+        // Animate messages
+        messages.forEach((message, index) => {
+            const userData = message.userData;
+            
+            // Floating animation
+            message.position.y = userData.originalPosition.y + 
+                Math.sin(time * userData.speed + userData.phase) * userData.floatAmount;
+            
+            // Rotation animation
+            message.rotation.x += userData.rotationSpeed.x * animationSpeed;
+            message.rotation.y += userData.rotationSpeed.y * animationSpeed;
+            message.rotation.z += userData.rotationSpeed.z * animationSpeed;
+            
+            // Orbital movement
+            const orbitSpeed = 0.1 * animationSpeed;
+            const orbitRadius = 2;
+            message.position.x = userData.originalPosition.x + 
+                Math.cos(time * orbitSpeed + index) * orbitRadius;
+            message.position.z = userData.originalPosition.z + 
+                Math.sin(time * orbitSpeed + index) * orbitRadius;
+        });
+    }
+    
+    // Update camera position
+    camera.position.x = cameraDistance * Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x);
+    camera.position.y = cameraDistance * Math.sin(cameraRotation.x);
+    camera.position.z = cameraDistance * Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x);
+    
+    // Add subtle mouse influence
+    camera.position.x += mouseX * 5;
+    camera.position.y += mouseY * 5;
+    
+    camera.lookAt(scene.position);
+    
+    renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function toggleAnimation() {
+    isAnimating = !isAnimating;
+    const button = document.getElementById('playPauseBtn');
+    button.innerHTML = isAnimating ? '⏸️ Pause' : '▶️ Play';
+    button.className = isAnimating ? 'control-btn' : 'control-btn active';
+}
+
+function changeSpeed(delta) {
+    animationSpeed = Math.max(0.1, Math.min(5, animationSpeed + delta));
+}
+
+function resetCamera() {
+    cameraRotation = { x: 0, y: 0 };
+    cameraDistance = 50;
+    mouseX = 0;
+    mouseY = 0;
+}
+
+function toggleInstructions() {
+    const instructions = document.getElementById('instructions');
+    instructions.classList.toggle('show');
+}
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+}
+
+// Initialize when page loads
+window.addEventListener('load', init);
+
+// Prevent zoom on double tap (mobile)
+let lastTouchEnd = 0;
+document.addEventListener('touchend', function (event) {
+    const now = (new Date()).getTime();
+    if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+    }
+    lastTouchEnd = now;
+}, false);
+</script>
+{% endblock %}

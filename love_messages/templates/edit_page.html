@@ -1,0 +1,595 @@
+<!-- EDIT PAGE TEMPLATE (edit_page.html) -->
+{% extends 'base.html' %}
+
+{% block title %}Edit {{ page.title }}{% endblock %}
+
+{% block content %}
+<style>
+    .save-status {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        padding: 10px 20px;
+        border-radius: 5px;
+        color: white;
+        font-weight: bold;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .save-status.success {
+        background: linear-gradient(45deg, #27ae60, #2ecc71);
+    }
+    
+    .save-status.error {
+        background: linear-gradient(45deg, #e74c3c, #c0392b);
+    }
+    
+    .save-status.show {
+        opacity: 1;
+    }
+    
+    .message-item {
+        background: rgba(255,255,255,0.1);
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: move;
+        transition: all 0.3s ease;
+    }
+    
+    .message-item:hover {
+        background: rgba(255,255,255,0.15);
+        transform: translateY(-2px);
+    }
+    
+    .message-item.dragging {
+        opacity: 0.5;
+        transform: rotate(5deg);
+    }
+    
+    .message-text {
+        color: white;
+        flex: 1;
+        margin-right: 15px;
+        word-break: break-word;
+    }
+    
+    .message-actions {
+        display: flex;
+        gap: 5px;
+    }
+    
+    .btn-small {
+        padding: 5px 10px;
+        font-size: 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-edit {
+        background: linear-gradient(45deg, #3498db, #2980b9);
+        color: white;
+    }
+    
+    .btn-delete {
+        background: linear-gradient(45deg, #e74c3c, #c0392b);
+        color: white;
+    }
+    
+    .btn-edit:hover, .btn-delete:hover {
+        transform: scale(1.05);
+    }
+    
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .qr-section {
+        text-align: center;
+        margin: 30px 0;
+        padding: 20px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 15px;
+    }
+    
+    .preview-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: linear-gradient(45deg, #9b59b6, #8e44ad);
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        border-radius: 50px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(155, 89, 182, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .preview-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(155, 89, 182, 0.4);
+    }
+    
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+        
+        .message-item {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .message-actions {
+            margin-top: 10px;
+            align-self: flex-end;
+        }
+    }
+</style>
+
+<div id="saveStatus" class="save-status"></div>
+
+<div class="card">
+    <h1 style="color: white; text-align: center; margin-bottom: 30px;">✏️ Edit: {{ page.title }}</h1>
+    
+    <!-- Page Settings -->
+    <form id="pageForm">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="form-group">
+                <label for="title">Page Title:</label>
+                <input type="text" id="title" name="title" value="{{ page.title }}" required>
+            </div>
+            <div class="form-group">
+                <label for="text_color">Text Color:</label>
+                <input type="color" id="text_color" name="text_color" value="{{ page.text_color }}">
+            </div>
+            <div class="form-group">
+                <label for="background_color">Background Color:</label>
+                <input type="color" id="background_color" name="background_color" value="{{ page.background_color }}">
+            </div>
+            <div class="form-group">
+                <label for="animation_speed">Animation Speed:</label>
+                <input type="range" id="animation_speed" name="animation_speed" 
+                       value="{{ page.animation_speed }}" min="0.1" max="3" step="0.1">
+                <span id="speedValue">{{ page.animation_speed }}</span>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button type="button" onclick="savePage()" class="btn" style="background: linear-gradient(45deg, #27ae60, #2ecc71);">
+                💾 Save Changes
+            </button>
+            <button type="button" onclick="autoSave()" class="btn" style="background: linear-gradient(45deg, #f39c12, #e67e22);">
+                🔄 Auto-Save: <span id="autoSaveStatus">OFF</span>
+            </button>
+        </div>
+    </form>
+    
+    <!-- QR Code Section -->
+    <div class="qr-section">
+        <h3 style="color: white; margin-bottom: 15px;">💖 Heart QR Code</h3>
+        <img src="{{ qr_code }}" alt="Heart QR Code" style="max-width: 200px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        <p style="color: rgba(255,255,255,0.8); margin-top: 10px;">Share this QR code for the 3D experience!</p>
+        <button onclick="downloadQR()" class="btn" style="background: linear-gradient(45deg, #34495e, #2c3e50); margin-top: 10px;">
+            📱 Download QR Code
+        </button>
+    </div>
+    
+    <!-- Messages Management -->
+    <div class="card" style="background: rgba(255, 255, 255, 0.05);">
+        <h3 style="color: white; margin-bottom: 20px;">💬 Manage Messages ({{ messages.count }} total)</h3>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <input type="text" id="new-message" 
+                   placeholder="Enter a love message..." 
+                   style="margin-bottom: 10px;">
+            <button onclick="addMessage()" class="btn">➕ Add Message</button>
+            <button onclick="addRandomMessage()" class="btn" style="background: linear-gradient(45deg, #e67e22, #d35400);">
+                🎲 Add Random
+            </button>
+        </div>
+        
+        <div id="messages-list">
+            {% for message in messages %}
+            <div class="message-item" data-message-id="{{ message.id }}" draggable="true">
+                <span class="message-text">{{ message.text }}</span>
+                <div class="message-actions">
+                    <button onclick="editMessage({{ message.id }}, '{{ message.text|escapejs }}')" 
+                            class="btn-small btn-edit">✏️ Edit</button>
+                    <button onclick="deleteMessage({{ message.id }})" 
+                            class="btn-small btn-delete">🗑️ Delete</button>
+                </div>
+            </div>
+            {% empty %}
+            <p style="color: rgba(255,255,255,0.6); text-align: center; padding: 20px;">
+                No messages yet. Add your first love message above!
+            </p>
+            {% endfor %}
+        </div>
+        
+        {% if messages.count > 1 %}
+        <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin-top: 15px;">
+            💡 Tip: Drag and drop messages to reorder them
+        </p>
+        {% endif %}
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="{% url 'dashboard' %}" class="btn" style="background: linear-gradient(45deg, #666, #333);">
+            ← Back to Dashboard
+        </a>
+        <button onclick="duplicatePage()" class="btn" style="background: linear-gradient(45deg, #9b59b6, #8e44ad);">
+            📋 Duplicate Page
+        </button>
+        <button onclick="deletePage()" class="btn" style="background: linear-gradient(45deg, #e74c3c, #c0392b);">
+            🗑️ Delete Page
+        </button>
+    </div>
+</div>
+
+<!-- Floating Preview Button -->
+<button class="preview-button" onclick="previewPage()">
+    👁️ Preview 3D
+</button>
+
+<!-- Edit Message Modal -->
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2c3e50; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%;">
+        <h3 style="color: white; margin-bottom: 20px;">Edit Message</h3>
+        <textarea id="editMessageText" style="width: 100%; height: 100px; padding: 10px; border-radius: 5px; border: none; resize: vertical;"></textarea>
+        <div style="text-align: center; margin-top: 20px;">
+            <button onclick="saveEditedMessage()" class="btn" style="background: linear-gradient(45deg, #27ae60, #2ecc71);">Save</button>
+            <button onclick="closeEditModal()" class="btn" style="background: linear-gradient(45deg, #666, #333);">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let autoSaveInterval;
+let isAutoSaving = false;
+let currentEditingMessageId = null;
+let draggedElement = null;
+
+// Random love messages for inspiration
+const randomMessages = [
+    "You make my heart skip a beat 💕",
+    "Every moment with you is magical ✨",
+    "You are my sunshine on cloudy days ☀️",
+    "Love you to the moon and back 🌙",
+    "You complete me in every way 💖",
+    "Forever and always, my love 💍",
+    "You are my happy place 🏠",
+    "My heart belongs to you 💝",
+    "You make life beautiful 🌺",
+    "Together we are unstoppable 💪"
+];
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    // Animation speed slider
+    const speedSlider = document.getElementById('animation_speed');
+    const speedValue = document.getElementById('speedValue');
+    
+    speedSlider.addEventListener('input', function() {
+        speedValue.textContent = this.value;
+    });
+    
+    // Setup drag and drop
+    setupDragAndDrop();
+    
+    // Auto-save on input changes
+    const inputs = document.querySelectorAll('#pageForm input');
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (isAutoSaving) {
+                savePage();
+            }
+        });
+    });
+});
+
+function showStatus(message, type = 'success') {
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.textContent = message;
+    statusEl.className = `save-status ${type} show`;
+    
+    setTimeout(() => {
+        statusEl.classList.remove('show');
+    }, 3000);
+}
+
+function savePage() {
+    const formData = new FormData(document.getElementById('pageForm'));
+    const data = Object.fromEntries(formData.entries());
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showStatus('✅ ' + data.message, 'success');
+        } else {
+            showStatus('❌ Failed to save', 'error');
+        }
+    })
+    .catch(error => {
+        showStatus('❌ Error saving page', 'error');
+        console.error('Save error:', error);
+    });
+}
+
+function autoSave() {
+    const statusEl = document.getElementById('autoSaveStatus');
+    
+    if (isAutoSaving) {
+        isAutoSaving = false;
+        clearInterval(autoSaveInterval);
+        statusEl.textContent = 'OFF';
+        showStatus('Auto-save disabled', 'success');
+    } else {
+        isAutoSaving = true;
+        autoSaveInterval = setInterval(savePage, 30000); // Save every 30 seconds
+        statusEl.textContent = 'ON';
+        showStatus('Auto-save enabled (every 30s)', 'success');
+    }
+}
+
+function addMessage() {
+    const messageText = document.getElementById('new-message').value.trim();
+    if (!messageText) return;
+    
+    fetch(`/api/add-message/{{ page.id }}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({text: messageText, order: 0})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    });
+}
+
+function addRandomMessage() {
+    const randomMessage = randomMessages[Math.floor(Math.random() * randomMessages.length)];
+    document.getElementById('new-message').value = randomMessage;
+    addMessage();
+}
+
+function editMessage(messageId, currentText) {
+    currentEditingMessageId = messageId;
+    document.getElementById('editMessageText').value = currentText;
+    document.getElementById('editModal').style.display = 'block';
+}
+
+function saveEditedMessage() {
+    const newText = document.getElementById('editMessageText').value.trim();
+    if (!newText) {
+        showStatus('Message cannot be empty', 'error');
+        return;
+    }
+    
+            fetch(`/api/update-message/${currentEditingMessageId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({text: newText})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeEditModal();
+            location.reload();
+        } else {
+            showStatus('Failed to update message', 'error');
+        }
+    })
+    .catch(error => {
+        showStatus('Error updating message', 'error');
+        console.error('Update message error:', error);
+    });
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+    currentEditingMessageId = null;
+}
+
+function deleteMessage(messageId) {
+    if (confirm('Are you sure you want to delete this message?')) {
+        fetch(`/api/delete-message/${messageId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                showStatus('Failed to delete message', 'error');
+            }
+        })
+        .catch(error => {
+            showStatus('Error deleting message', 'error');
+            console.error('Delete message error:', error);
+        });
+    }
+}
+
+function setupDragAndDrop() {
+    const messagesList = document.getElementById('messages-list');
+    const messageItems = messagesList.querySelectorAll('.message-item');
+    
+    messageItems.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+    });
+}
+
+function handleDragStart(e) {
+    draggedElement = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', this.outerHTML);
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const afterElement = getDragAfterElement(document.getElementById('messages-list'), e.clientY);
+    if (afterElement == null) {
+        document.getElementById('messages-list').appendChild(draggedElement);
+    } else {
+        document.getElementById('messages-list').insertBefore(draggedElement, afterElement);
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    
+    // Get new order of messages
+    const messageItems = document.getElementById('messages-list').querySelectorAll('.message-item');
+    const messageIds = Array.from(messageItems).map(item => item.dataset.messageId);
+    
+    // Send reorder request
+    fetch(`/api/reorder-messages/{{ page.id }}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({message_ids: messageIds})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showStatus('Messages reordered successfully', 'success');
+        } else {
+            showStatus('Failed to reorder messages', 'error');
+            location.reload(); // Reload to restore original order
+        }
+    })
+    .catch(error => {
+        showStatus('Error reordering messages', 'error');
+        console.error('Reorder error:', error);
+        location.reload();
+    });
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    draggedElement = null;
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.message-item:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function previewPage() {
+    window.open(`{% url 'view_page' page.id %}`, '_blank');
+}
+
+function duplicatePage() {
+    if (confirm('Create a copy of this page?')) {
+        window.location.href = `{% url 'duplicate_page' page.id %}`;
+    }
+}
+
+function deletePage() {
+    const pageName = '{{ page.title|escapejs }}';
+    if (confirm(`Are you sure you want to delete "${pageName}"? This action cannot be undone.`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `{% url 'delete_page' page.id %}`;
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function downloadQR() {
+    const qrImage = document.querySelector('.qr-section img');
+    const link = document.createElement('a');
+    link.download = `${document.getElementById('title').value}-qr-code.png`;
+    link.href = qrImage.src;
+    link.click();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+            case 's':
+                e.preventDefault();
+                savePage();
+                break;
+            case 'Enter':
+                if (document.getElementById('new-message') === document.activeElement) {
+                    e.preventDefault();
+                    addMessage();
+                }
+                break;
+        }
+    }
+    
+    if (e.key === 'Escape') {
+        closeEditModal();
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEditModal();
+    }
+});
+</script>
+{% endblock %}

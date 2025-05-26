@@ -1,0 +1,7 @@
+Collecting Django
+  Using cached django-4.2.21-py3-none-any.whl (8.0 MB)
+Requirement already satisfied: sqlparse>=0.3.1 in ./venv/lib/python3.8/site-packages (from Django) (0.5.3)
+Requirement already satisfied: backports.zoneinfo; python_version < "3.9" in ./venv/lib/python3.8/site-packages (from Django) (0.2.1)
+Requirement already satisfied: asgiref<4,>=3.6.0 in ./venv/lib/python3.8/site-packages (from Django) (3.8.1)
+Requirement already satisfied: typing-extensions>=4; python_version < "3.11" in ./venv/lib/python3.8/site-packages (from asgiref<4,>=3.6.0->Django) (4.13.2)
+Installing collected packages: Django
