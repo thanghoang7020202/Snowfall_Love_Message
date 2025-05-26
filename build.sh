@@ -2,18 +2,15 @@
 # Exit on error
 set -o errexit
 
-# Update package lists and install necessary build tools
 sudo apt-get update
 sudo apt-get install -y build-essential python3-dev
-
-# Upgrade pip and setuptools
 pip install --upgrade pip setuptools
 
-# Install project dependencies
+# Modify this line as needed for your package manager (pip, poetry, etc.)
 pip install -r requirements.txt
 
-# Collect static files
+# Convert static asset files
 python manage.py collectstatic --no-input
 
-# Apply database migrations
+# Apply any outstanding database migrations
 python manage.py migrate
