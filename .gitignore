@@ -10,3 +10,6 @@ venv/
 
 # in staticfiles
 staticfiles/
+
+# .env
+.env
