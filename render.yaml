@@ -12,10 +12,22 @@ services:
     buildCommand: './build.sh'
     startCommand: 'python3 -m gunicorn love_project.asgi:application -k uvicorn.workers.UvicornWorker' 
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: SnowfallDB
-          property: connectionString
+      - key: DB_ENGINE
+        value: "mssql"
+      - key: DB_NAME
+        value: "SnowfallDB"
+      - key: DB_USER
+        value: "ad"
+      # Set DB_PASSWORD manually in Render dashboard instead of here
+      # - key: DB_PASSWORD
+      #   value: "your_password_here"
+      - key: DB_HOST
+        value: "st-lucia.database.windows.net"
+      - key: DB_PORT
+        value: "1433"
+      - key: DB_DRIVER
+        value: "ODBC Driver 17 for SQL Server"
+      
       - key: SECRET_KEY
         generateValue: true
       - key: WEB_CONCURRENCY

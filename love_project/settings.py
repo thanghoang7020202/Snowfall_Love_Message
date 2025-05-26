@@ -74,7 +74,10 @@ WSGI_APPLICATION = 'love_project.wsgi.application'
 
 
 # Check if we're in testing/CI environment
-TESTING = 'test' in os.sys.argv or os.environ.get('TESTING') == 'True'
+import os
+import sys
+
+TESTING = 'test' in sys.argv or os.environ.get('TESTING') == 'True'
 
 if TESTING or os.environ.get('USE_SQLITE') == 'True':
     # Use SQLite for testing and CI
@@ -85,25 +88,41 @@ if TESTING or os.environ.get('USE_SQLITE') == 'True':
         }
     }
 else:
-    # Use SQL Server for production/development
-    DATABASES = {
-        "default": {
-            "ENGINE": "mssql",
-            "NAME": "SnowfallDB",
-            "USER": "ad",
-            "PASSWORD": "quocthangsu6@gmail.com",
-            "HOST": "st-lucia.database.windows.net",
-            "PORT": "1433",
-            "OPTIONS": {
-                "driver": "ODBC Driver 17 for SQL Server",
+    # Check if we're in production (Render) or development
+    if os.environ.get('DB_ENGINE'):
+        # Production: Use environment variables from Render
+        DATABASES = {
+            "default": {
+                "ENGINE": os.environ.get('DB_ENGINE', 'mssql'),
+                "NAME": os.environ.get('DB_NAME', 'SnowfallDB'),
+                "USER": os.environ.get('DB_USER', 'ad'),
+                "PASSWORD": os.environ.get('DB_PASSWORD'),
+                "HOST": os.environ.get('DB_HOST', 'st-lucia.database.windows.net'),
+                "PORT": os.environ.get('DB_PORT', '1433'),
+                "OPTIONS": {
+                    "driver": os.environ.get('DB_DRIVER', 'ODBC Driver 17 for SQL Server'),
+                },
             },
-        },
-    }
+        }
+    else:
+        # Development: Use hardcoded values
+        DATABASES = {
+            "default": {
+                "ENGINE": "mssql",
+                "NAME": "SnowfallDB",
+                "USER": "ad",
+                "PASSWORD": "quocthangsu6@gmail.com",
+                "HOST": "st-lucia.database.windows.net",
+                "PORT": "1433",
+                "OPTIONS": {
+                    "driver": "ODBC Driver 17 for SQL Server",
+                },
+            },
+        }
 
-# Override with environment variable if DATABASE_URL is set (useful for deployment)
-if 'DATABASE_URL' in os.environ:
-    DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'])
-
+# Remove the DATABASE_URL override since we're not using it anymore
+# if 'DATABASE_URL' in os.environ:
+#     DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'])
 
 
 # Password validation
