@@ -2,10 +2,6 @@
 # Exit on error
 set -o errexit
 
-sudo apt-get update
-sudo apt-get install -y build-essential python3-dev
-pip install --upgrade pip setuptools
-
 # Modify this line as needed for your package manager (pip, poetry, etc.)
 pip install -r requirements.txt
 
