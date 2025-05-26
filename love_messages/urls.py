@@ -21,4 +21,9 @@ urlpatterns = [
     path('api/add-message/<uuid:page_id>/', views.add_message, name='add_message'),
     path('api/delete-message/<int:message_id>/', views.delete_message, name='delete_message'),
     path('api/copy-messages/', views.copy_messages, name='copy_messages'),
+    path('api/update-message/<int:message_id>/', views.update_message, name='update_message'),
+    path('api/reorder-messages/<uuid:page_id>/', views.reorder_messages, name='reorder_messages'),
+    path('api/update-message/<int:message_id>/', views.update_message, name='update_message'),
+    
+    path('preview/<uuid:page_id>/', views.preview_page, name='preview_page'),
 ]

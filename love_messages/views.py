@@ -13,11 +13,7 @@ import qrcode
 import io
 import base64
 from PIL import Image, ImageDraw
-import numpy as np
-import random
-import string
 import logging
-import math
 
 from .models import MessagePage, Message, MessageTemplate
 
@@ -266,7 +262,15 @@ logger = logging.getLogger(__name__)
 def add_message(request, page_id):
     if request.method == 'POST':
         page = get_object_or_404(MessagePage, id=page_id, user=request.user)
-        data = json.loads(request.body)
+        
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+        
+        # Check for required 'text' field
+        if 'text' not in data or not data['text'].strip():
+            return JsonResponse({'success': False, 'error': 'Text field is required'}, status=400)
         
         Message.objects.create(
             page=page,
@@ -276,7 +280,7 @@ def add_message(request, page_id):
         
         return JsonResponse({'success': True})
     
-    return JsonResponse({'success': False})
+    return JsonResponse({'success': False}, status=405)
     
 @csrf_exempt
 @login_required
@@ -302,11 +306,14 @@ def update_message(request, message_id):
 @login_required
 def delete_message(request, message_id):
     if request.method == 'DELETE':
-        message = get_object_or_404(Message, id=message_id, page__user=request.user)
-        message.delete()
-        return JsonResponse({'success': True})
+        try:
+            message = get_object_or_404(Message, id=message_id, page__user=request.user)
+            message.delete()
+            return JsonResponse({'success': True})
+        except:
+            return JsonResponse({'success': False, 'error': 'Message not found or access denied'})
     
-    return JsonResponse({'success': False, 'error': 'Message not found or access denied'})
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 @csrf_exempt
 @login_required
@@ -412,7 +419,7 @@ def preview_page(request, page_id):
     messages_list = list(page.messages.values_list('text', flat=True).order_by('order', 'id'))
     
     # Don't increment view count for preview
-    return render(request, 'preview_page.html', {
+    return render(request, 'view_page.html', {  # Changed from 'preview_page.html'
         'page': page,
         'messages_json': json.dumps(messages_list),
         'is_preview': True
