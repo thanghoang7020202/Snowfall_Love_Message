@@ -233,16 +233,19 @@ function init() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
-    controls.minDistance = 40;
-    controls.maxDistance = 2000;
 
-    // Restrict horizontal rotation to ±30 degrees (in radians)
-    controls.minAzimuthAngle = -Math.PI / 6;
-    controls.maxAzimuthAngle = Math.PI / 6;
+    // Prevent zooming out from starting point
+    controls.minDistance = camera.position.distanceTo(new THREE.Vector3(...getInitialCameraSettings().look));
+    controls.maxDistance = controls.minDistance;
 
-    // Optionally restrict vertical rotation (polar angle) if you want
-    // controls.minPolarAngle = 0; // looking straight up
-    // controls.maxPolarAngle = Math.PI / 2; // looking at horizon
+    // Restrict horizontal rotation to ±60 degrees (in radians)
+    controls.minAzimuthAngle = -Math.PI / 6; // -30 degrees 
+    controls.maxAzimuthAngle = Math.PI / 6;  // +30 degrees
+
+    // Restrict vertical rotation so user can't look too far up or down
+    // (0 = straight up, Math.PI/2 = horizon, Math.PI = straight down)
+    controls.minPolarAngle = Math.PI / 4;    // 45deg from top (can't look too far up)
+    controls.maxPolarAngle = Math.PI / 1.5;  // ~120deg from top (can't look too far down)
 
     // Mix text and hearts together
     createMixedParticles();
@@ -423,6 +426,15 @@ function onWindowResize() {
     const camSet = getInitialCameraSettings();
     camera.position.set(...camSet.pos);
     camera.lookAt(...camSet.look);
+
+    // Re-apply controls limits after resize
+    const minDist = camera.position.distanceTo(new THREE.Vector3(...camSet.look));
+    controls.minDistance = minDist;
+    controls.maxDistance = minDist;
+    controls.minAzimuthAngle = -Math.PI / 4;
+    controls.maxAzimuthAngle = Math.PI / 4;
+    controls.minPolarAngle = Math.PI / 4;
+    controls.maxPolarAngle = Math.PI / 1.5;
 }
 
 function toggleAnimation() {
