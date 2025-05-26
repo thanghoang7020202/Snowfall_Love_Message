@@ -44,8 +44,20 @@ jobs:
         # Update package lists
         sudo apt-get update
         
+        # List available packages for debugging
+        echo "Available ODBC packages:"
+        apt-cache search msodbcsql || true
+        
         # Install ODBC driver and development headers
-        sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+        # Find and install the latest available msodbcsql version
+        ODBC_PKG=$(apt-cache search msodbcsql | head -n1 | cut -d' ' -f1)
+        if [ -n "$ODBC_PKG" ]; then
+          echo "Installing $ODBC_PKG"
+          sudo ACCEPT_EULA=Y apt-get install -y $ODBC_PKG
+        else
+          echo "No msodbcsql package found, trying msodbcsql17 and msodbcsql18"
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17 || sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+        fi
         sudo apt-get install -y unixodbc-dev
         
     - name: Install dependencies
