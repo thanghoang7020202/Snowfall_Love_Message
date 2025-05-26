@@ -1,0 +1,22 @@
+databases:
+  - name: SnowfallDB_cameshowme
+    plan: free
+    databaseName: SnowfallDB_cameshowme
+    user: SnowfallDB_cameshowme
+
+services:
+  - type: web
+    plan: free
+    name: SnowfallDB_cameshowme
+    runtime: python
+    buildCommand: './build.sh'
+    startCommand: 'python -m gunicorn love_project.asgi:application -k uvicorn.workers.UvicornWorker' 
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: SnowfallDB_cameshowme
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: 4
