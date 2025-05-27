@@ -14,6 +14,7 @@ import io
 import base64
 from PIL import Image, ImageDraw
 import logging
+import math
 
 from .models import MessagePage, Message, MessageTemplate
 
@@ -201,7 +202,7 @@ def generate_heart_qr_code(url):
     left_qr_y = left_center_y - radius
     
     # Right semi-circular QR position
-    right_center_x = center_x + radius // 2 + horizontal_offset #32
+    right_center_x = center_x + radius // 2 + horizontal_offset
     right_center_y = qr_y + vertical_offset
     right_qr_x = right_center_x - radius
     right_qr_y = right_center_y - radius
