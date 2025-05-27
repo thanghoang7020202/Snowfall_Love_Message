@@ -190,7 +190,8 @@ def generate_heart_qr_code(url):
     center_x = heart_width // 2
     vertical_offset = (radius // 2) + 40
     # horizontal_offset = floor((radius // 2) // PI) 
-    horizontal_offset = int(radius // 6.30)  # Approximation of horizontal offset
+    TWO_PI = 2 * math.pi  # Define a constant for 2 * pi
+    horizontal_offset = int(radius // TWO_PI)  # Derived horizontal offset using TWO_PI
     print(f"Heart dimensions: {heart_width}x{heart_height}, QR size: {qr_size}, radius: {radius}")
     
     # Left semi-circular QR position
